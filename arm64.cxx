@@ -760,19 +760,24 @@ void Arm64::trace_state()
     else
         previous_symbol = symbol_name;
 
-    char symbol_offset_str[ 40 ];
-    symbol_offset_str[ 0 ] = 0;
-
+    char symbol_offset_str[ 40 ] = { 0 };
     if ( 0 != symbol_name[ 0 ] )
     {
         if ( 0 != symbol_offset )
-            snprintf( symbol_offset_str, _countof( symbol_offset_str ), " + %llx", symbol_offset );
-        strcat( symbol_offset_str, "\n            " );
+            snprintf( symbol_offset_str, _countof( symbol_offset_str ), " + %llx\n            ", symbol_offset );
+        else
+            snprintf( symbol_offset_str, _countof( symbol_offset_str ), "\n            " );
     }
+
+    char flags[ 5 ] = { 0 };
+    flags[ 0 ] = fN ? 'N' : 'n';
+    flags[ 1 ] = fZ ? 'Z' : 'z';
+    flags[ 2 ] = fC ? 'C' : 'c';
+    flags[ 3 ] = fV ? 'V' : 'v';
 
     //tracer.TraceBinaryData( getmem( 0x2cb97f0 + 16 ), 16, 4 );
 
-    tracer.Trace( "pc %8llx %s%s op %08llx %s ==> ", pc, symbol_name, symbol_offset_str, op, render_flags() );
+    tracer.Trace( "pc %8llx %s%s op %08llx %s ==> ", pc, symbol_name, symbol_offset_str, op, flags );
 
     uint8_t hi8 = (uint8_t) ( op >> 24 );
     switch ( hi8 )
@@ -2198,20 +2203,20 @@ void Arm64::trace_state()
             {
                 uint64_t sz = opbit( 22 );
                 pT = ( !sz && !Q ) ? "2s" : ( !sz && Q ) ? "4s" : ( sz && Q ) ? "2d" : "?";
-                tracer.Trace( "v%llu.%s, v%llu.%s, v%llu.%s\n", n, pT, n, pT, m, pT );
+                tracer.Trace( "fdiv v%llu.%s, v%llu.%s, v%llu.%s\n", d, pT, n, pT, m, pT );
             }
             else if ( bit21 && ( 0x1b == bits15_10 || 0x19 == bits15_10 ) ) // UMIN <Vd>.<T>, <Vn>.<T>, <Vm>.<T>    ;    UMAX <Vd>.<T>, <Vn>.<T>, <Vm>.<T>
-                tracer.Trace( "%s v%llu.%s, v%llu.%s, %llu.%s\n", ( 0x1b == bits15_10 ) ? "umin" : "umax", d, pT, n, pT, m, pT );
+                tracer.Trace( "%s v%llu.%s, v%llu.%s, v%llu.%s\n", ( 0x1b == bits15_10 ) ? "umin" : "umax", d, pT, n, pT, m, pT );
             else if ( bit21 && 8 == bits20_17 && ( 0x6a == bits16_10 || 0x2a == bits16_10 ) ) // UMINV <V><d>, <Vn>.<T>    ;    UMAXV <V><d>, <Vn>.<T>
             {
                 char v = ( 0 == size ) ? 'b' : ( 1 == size ) ? 'h' : ( 2 == size ) ? 's' : '?';
-                tracer.Trace( "%s %c%llu, v%llu.%s\n", ( 0x6a == bits16_10 ) ? "uminv" : "unaxv", v, d, n, pT );
+                tracer.Trace( "%s %c%llu, v%llu.%s\n", ( 0x6a == bits16_10 ) ? "uminv" : "umaxv", v, d, n, pT );
             }
             else if ( bit21 && 4 == bits15_10 ) // UADDW{2} <Vd>.<Ta>, <Vn>.<Ta>, <Vm>.<Tb>
             {
                 const char * pTA = ( 0 == size ) ? "8h" : ( 1 == size ) ? "4s" : ( 2 == size ) ? "2d" : "?";
                 const char * pTB = get_ld1_vector_T( size, Q );
-                tracer.Trace( "uaddw%s, v%llu.%s, v%llu.%s, v%llu.%s\n", Q ? "2" : "", d, pTA, n, pTA, m, pTB );
+                tracer.Trace( "uaddw%s v%llu.%s, v%llu.%s, v%llu.%s\n", Q ? "2" : "", d, pTA, n, pTA, m, pTB );
             }
             else if ( bit23 && bit21 && 0 == bits20_17 && 0x3e == bits16_10 ) // FNEG <Vd>.<T>, <Vn>.<T>
             {
@@ -2225,10 +2230,10 @@ void Arm64::trace_state()
                 uint64_t sz = opbit( 22 );
                 uint64_t ty = ( sz << 1 ) | Q;
                 pT = ( 0 == ty ) ? "2s" : ( 1 == ty ) ? "4s" : ( 3 == ty ) ? "2d" : "?";
-                tracer.Trace( "faddp v%llu.%s, v%llu,%s, v%llu.%s\n", d, pT, n, pT, m, pT );
+                tracer.Trace( "faddp v%llu.%s, v%llu.%s, v%llu.%s\n", d, pT, n, pT, m, pT );
             }
             else if ( bit21 && 0x11 == opcode ) // USHL <Vd>.<T>, <Vn>.<T>, <Vm>.<T>
-                tracer.Trace( "ushl, v%llu.%s, v%llu.%s, v%llu.%s\n", d, pT, n, pT, m, pT );
+                tracer.Trace( "ushl v%llu.%s, v%llu.%s, v%llu.%s\n", d, pT, n, pT, m, pT );
             else if ( bit21 && 8 == bits20_17 && 0xe == opcode7 ) // UADDLV <V><d>, <Vn>.<T>
                 tracer.Trace( "uaddlv v%llu, v%llu.%s\n", d, n, pT );
             else if ( 0x6e == hi8 && 0 == bits23_21 && !bit15 && bit10 ) // INS <Vd>.<Ts>[<index>], <R><n>
@@ -2436,7 +2441,7 @@ void Arm64::trace_state()
             }
             else if ( 0x2832 == bits23_10 || 0x3832 == bits23_10 ) // FCMGE <V><d>, <V><n>, #0.0
             {
-                char type = sz ? 'd' : 'f';
+                char type = sz ? 'd' : 's';
                 tracer.Trace( "fcmge %c%llu, %c%llu, #0.0\n", type, d, type, n );
             }
             else
@@ -2810,7 +2815,7 @@ void Arm64::trace_state()
             {
                 uint64_t m = imm5;
                 const char * pT = ( 0 == Q ) ? "8B" : "16B";
-                tracer.Trace( "and v%llu.%s, v%llu.%s v%llu.%s\n", d, pT, n, pT, m, pT );
+                tracer.Trace( "and v%llu.%s, v%llu.%s, v%llu.%s\n", d, pT, n, pT, m, pT );
             }
             else if ( 5 == bits23_21 && !bit15 && 3 == bits14_11 && bit10 ) // ORR <Vd>.<T>, <Vn>.<T>, <Vm>.<T>
             {
